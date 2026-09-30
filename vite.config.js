@@ -14,6 +14,9 @@ module.exports = defineConfig({
   server: {
     host: '0.0.0.0', port: 8000, strictPort: true,
     allowedHosts: ['lion-ruby.exe.xyz'],
-    proxy: { '/api': 'http://127.0.0.1:3001', '/dashboard': 'http://127.0.0.1:3001' },
+    proxy: {
+      '/api': { target: 'http://127.0.0.1:3001', changeOrigin: false },
+      '/dashboard': { target: 'http://127.0.0.1:3001', changeOrigin: false },
+    },
   },
 });
