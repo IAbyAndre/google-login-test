@@ -26,6 +26,8 @@ async function showLogin() {
     }
     google.accounts.id.initialize({
       client_id: clientId,
+      auto_select: false,
+      button_auto_select: false,
       callback: async ({ credential }) => {
         status.textContent = 'Verificando identidad…';
         try {
@@ -38,7 +40,9 @@ async function showLogin() {
       },
     });
     google.accounts.id.renderButton(document.querySelector('#google-button'), {
-      theme: 'outline', size: 'large', text: 'signin_with',
+      // The medium standard button is never personalized with a browser account.
+      type: 'standard', theme: 'outline', size: 'medium',
+      shape: 'pill', text: 'signin_with', width: 230, locale: 'es',
     });
     status.textContent = '';
   } catch (error) { status.textContent = error.message || 'No se pudo conectar con el servidor.'; }
