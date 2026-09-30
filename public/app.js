@@ -44,6 +44,9 @@ async function showLogin() {
       type: 'standard', theme: 'outline', size: 'medium',
       shape: 'pill', text: 'signin_with', width: 230, locale: 'es',
     });
+    // Replace the local visual placeholder only after GIS has drawn its button.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    document.querySelector('.login-action').classList.add('ready');
     status.textContent = '';
   } catch (error) { status.textContent = error.message || 'No se pudo conectar con el servidor.'; }
 }

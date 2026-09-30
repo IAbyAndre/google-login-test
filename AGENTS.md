@@ -3,6 +3,7 @@
 - Minimal end-to-end GIS login test. HTML, vanilla JS/CSS, Vite for development/build, Express API, SQLite (`better-sqlite3`).
 - No frontend framework, ORM, JWT session, or additional authentication provider. Keep the UI and dependencies small.
 - `public/` is Vite's root. `/api/*` and `/dashboard` are proxied to Express in development. Express authorizes `/dashboard` and all private API data; frontend display checks alone are not access control.
+- Login styles are inline in `public/index.html` so the page does not flash or shift on reload. A local CSS placeholder occupies the exact GIS button slot until the real Google control renders; keep the GIS button for the ID-token callback.
 - Google ID tokens must be verified on the server with `google-auth-library` and the configured audience. Session cookie `sid` is an opaque random secret; only its SHA-256 hash is stored in SQLite. Never commit credentials or the DB.
 
 ## Setup

@@ -4,7 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Google Login Test</title>
-  <link rel="stylesheet" href="/style.css">
+  <!-- Critical login CSS is inline so the card is stable before Vite/GIS finish loading. -->
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #242424; background: #fafafa; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; }
+    .login-card { width: min(360px, calc(100% - 48px)); height: 150px; padding: 32px; background: white; border: 1px solid #e6e6e6; border-radius: 10px; }
+    h1 { margin: 0 0 28px; font-size: 1.4rem; font-weight: 600; }
+    .login-action { position: relative; width: 230px; height: 36px; margin-inline: auto; }
+    .google-placeholder, #google-button { position: absolute; inset: 0; width: 230px; height: 36px; box-sizing: border-box; }
+    .google-placeholder { display: flex; align-items: center; justify-content: center; gap: 9px; border: 1px solid #dadce0; border-radius: 99px; background: white; color: #3c4043; font-size: 14px; cursor: wait; }
+    .google-g { font-size: 18px; font-weight: bold; background: conic-gradient(#4285f4 0 25%, #34a853 25% 48%, #fbbc05 48% 68%, #ea4335 68% 82%, #4285f4 82%); background-clip: text; color: transparent; }
+    #google-button { display: flex; align-items: center; justify-content: center; visibility: hidden; }
+    .login-action.ready #google-button { visibility: visible; }
+    .login-action.ready .google-placeholder { visibility: hidden; }
+    #status { height: 2.8em; margin: 18px 0 0; overflow: auto; color: #666; font-size: .9rem; }
+    #status:empty { visibility: hidden; }
+  </style>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="/app.js" type="module"></script>
 </head>
@@ -12,9 +27,12 @@
   <main class="card login-card">
     <h1>Google Login Test</h1>
     <div class="login-action">
+      <div class="google-placeholder" aria-hidden="true">
+        <span class="google-g">G</span><span>Iniciar sesión con Google</span>
+      </div>
       <div id="google-button" aria-label="Iniciar sesión con Google"></div>
     </div>
-    <p id="status" role="status">Preparando login…</p>
+    <p id="status" role="status"></p>
   </main>
 </body>
 </html>
