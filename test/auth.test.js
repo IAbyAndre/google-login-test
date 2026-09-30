@@ -1,10 +1,15 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const Database = require('better-sqlite3');
 const { createApp } = require('../server');
 
 async function setup(t, verifyCredential = async () => ({
-  sub: 'google-user-123', email: 'test@example.com', name: 'Test User', email_verified: true,
+  sub: 'google-user-123', email: 'test@example.com', name: 'Test User',
+  picture: 'https://example.com/avatar.png', email_verified: true,
 })) {
   const { app, db } = createApp({ dbPath: ':memory:', clientId: 'test-client-id', verifyCredential });
   const server = app.listen(0, '127.0.0.1');
@@ -41,11 +46,30 @@ test('login stores user and opaque session, then logout revokes it', async (t) =
   assert.equal(db.prepare('SELECT token_hash FROM sessions').get().token_hash,
     createHash('sha256').update(secret).digest('hex'));
   assert.equal(db.prepare('SELECT google_sub FROM users').get().google_sub, 'google-user-123');
-  assert.equal((await request('/api/me', { headers: { cookie } })).status, 200);
+  assert.equal(db.prepare('SELECT picture FROM users').get().picture, 'https://example.com/avatar.png');
+  const profile = await (await request('/api/me', { headers: { cookie } })).json();
+  assert.deepEqual(profile.user, {
+    id: 1, name: 'Test User', email: 'test@example.com', picture: 'https://example.com/avatar.png',
+  });
   assert.equal((await request('/api/dashboard', { headers: { cookie } })).status, 200);
   assert.equal((await request('/dashboard', { headers: { cookie } })).status, 200);
   assert.equal((await post('/api/logout', {}, { headers: { cookie } })).status, 200);
   assert.equal((await request('/api/me', { headers: { cookie } })).status, 401);
+});
+
+test('migrates an existing user database without losing accounts', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gis-login-'));
+  const dbPath = path.join(dir, 'legacy.db');
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const legacy = new Database(dbPath);
+  legacy.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, google_sub TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL, name TEXT NOT NULL);
+    INSERT INTO users (google_sub, email, name) VALUES ('prior-user', 'prior@example.com', 'Prior User');`);
+  legacy.close();
+  const { db } = createApp({ dbPath, clientId: 'test-client-id' });
+  t.after(() => db.close());
+  assert.deepEqual(db.prepare('SELECT google_sub, picture FROM users').get(),
+    { google_sub: 'prior-user', picture: null });
 });
 
 test('bad origins and unverified tokens never create a session', async (t) => {

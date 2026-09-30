@@ -12,7 +12,7 @@ function createApp({ dbPath = process.env.DB_PATH || path.join(__dirname, 'app.d
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY, google_sub TEXT NOT NULL UNIQUE,
-      email TEXT NOT NULL, name TEXT NOT NULL
+      email TEXT NOT NULL, name TEXT NOT NULL, picture TEXT
     );
     CREATE TABLE IF NOT EXISTS sessions (
       token_hash TEXT PRIMARY KEY,
@@ -20,15 +20,20 @@ function createApp({ dbPath = process.env.DB_PATH || path.join(__dirname, 'app.d
       expires_at INTEGER NOT NULL
     );
   `);
+  // Existing installations already have a users table without a profile photo.
+  if (!db.pragma('table_info(users)').some((column) => column.name === 'picture')) {
+    db.exec('ALTER TABLE users ADD COLUMN picture TEXT');
+  }
   const googleClient = new OAuth2Client(clientId);
   const verify = verifyCredential || (async (credential) => {
     const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: clientId });
     return ticket.getPayload();
   });
-  const findSession = db.prepare(`SELECT users.id, users.email, users.name, sessions.expires_at
+  const findSession = db.prepare(`SELECT users.id, users.email, users.name, users.picture, sessions.expires_at
     FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token_hash = ?`);
-  const upsertUser = db.prepare(`INSERT INTO users (google_sub, email, name) VALUES (?, ?, ?)
-    ON CONFLICT(google_sub) DO UPDATE SET email = excluded.email, name = excluded.name RETURNING id`);
+  const upsertUser = db.prepare(`INSERT INTO users (google_sub, email, name, picture) VALUES (?, ?, ?, ?)
+    ON CONFLICT(google_sub) DO UPDATE SET email = excluded.email, name = excluded.name,
+    picture = excluded.picture RETURNING id`);
   const insertSession = db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)');
   const deleteSession = db.prepare('DELETE FROM sessions WHERE token_hash = ?');
   const deleteExpired = db.prepare('DELETE FROM sessions WHERE expires_at <= ?');
@@ -62,7 +67,7 @@ function createApp({ dbPath = process.env.DB_PATH || path.join(__dirname, 'app.d
       if (req.path === '/dashboard') return res.redirect('/');
       return res.status(401).json({ error: 'No autenticado.' });
     }
-    req.user = { id: session.id, email: session.email, name: session.name };
+    req.user = { id: session.id, email: session.email, name: session.name, picture: session.picture };
     next();
   }
 
@@ -79,7 +84,9 @@ function createApp({ dbPath = process.env.DB_PATH || path.join(__dirname, 'app.d
     if (!profile?.sub || !profile?.email || profile.email_verified !== true) {
       return res.status(401).json({ error: 'Cuenta de Google no verificada.' });
     }
-    const userId = upsertUser.get(profile.sub, profile.email, profile.name || profile.email).id;
+    const picture = typeof profile.picture === 'string' && profile.picture.startsWith('https://')
+      ? profile.picture : null;
+    const userId = upsertUser.get(profile.sub, profile.email, profile.name || profile.email, picture).id;
     const token = crypto.randomBytes(32).toString('hex');
     const hash = crypto.createHash('sha256').update(token).digest('hex');
     deleteExpired.run(Date.now());

@@ -47,8 +47,18 @@ async function showLogin() {
 async function showDashboard() {
   try {
     const { user } = await jsonRequest('/api/dashboard');
-    document.querySelector('#identity').textContent = `${user.name} · ${user.email}`;
-    status.textContent = 'Sesión activa y dashboard protegido.';
+    document.querySelector('#profile-name').textContent = user.name;
+    document.querySelector('#profile-email').textContent = user.email;
+    const avatar = document.querySelector('#avatar');
+    const initials = document.querySelector('#initials');
+    initials.textContent = (user.name || user.email).trim().slice(0, 1).toUpperCase();
+    if (user.picture) {
+      avatar.addEventListener('load', () => { avatar.hidden = false; initials.hidden = true; });
+      avatar.addEventListener('error', () => { avatar.hidden = true; initials.hidden = false; });
+      avatar.src = user.picture;
+    }
+    document.querySelector('#profile').hidden = false;
+    status.textContent = 'Sesión activa.';
     const logout = document.querySelector('#logout');
     logout.hidden = false;
     logout.addEventListener('click', async () => {

@@ -11,7 +11,16 @@
   <main class="card">
     <h1>Dashboard</h1>
     <p id="status" role="status">Comprobando sesión…</p>
-    <p id="identity"></p>
+    <section id="profile" class="profile" aria-label="Perfil de Google" hidden>
+      <div class="avatar">
+        <img id="avatar" alt="" referrerpolicy="no-referrer" hidden>
+        <span id="initials" aria-hidden="true"></span>
+      </div>
+      <div class="profile-info">
+        <strong id="profile-name"></strong>
+        <span id="profile-email"></span>
+      </div>
+    </section>
     <button id="logout" type="button" hidden>Cerrar sesión</button>
   </main>
 </body>
