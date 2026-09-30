@@ -1,0 +1,22 @@
+{
+  "name": "google-login-test",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal Google Identity Services login test",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 8000 --strictPort",
+    "server": "node server.js",
+    "build": "vite build",
+    "test": "node --test"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "google-auth-library": "^11.1.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1"
+  }
+}
