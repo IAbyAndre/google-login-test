@@ -52,7 +52,9 @@ test('login stores user and opaque session, then logout revokes it', async (t) =
     id: 1, name: 'Test User', email: 'test@example.com', picture: 'https://example.com/avatar.png',
   });
   assert.equal((await request('/api/dashboard', { headers: { cookie } })).status, 200);
-  assert.equal((await request('/dashboard', { headers: { cookie } })).status, 200);
+  const dashboard = await request('/dashboard', { headers: { cookie } });
+  assert.equal(dashboard.status, 200);
+  assert.match(await dashboard.text(), /src="\/app\.js"/);
   assert.equal((await post('/api/logout', {}, { headers: { cookie } })).status, 200);
   assert.equal((await request('/api/me', { headers: { cookie } })).status, 401);
 });

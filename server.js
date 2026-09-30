@@ -6,7 +6,12 @@ const Database = require('better-sqlite3');
 const { OAuth2Client } = require('google-auth-library');
 const SESSION_AGE = 7 * 24 * 60 * 60 * 1000;
 
-function createApp({ dbPath = process.env.DB_PATH || path.join(__dirname, 'app.db'), clientId = process.env.GOOGLE_CLIENT_ID || '', verifyCredential } = {}) {
+function createApp({
+  dbPath = process.env.DB_PATH || path.join(__dirname, 'app.db'),
+  clientId = process.env.GOOGLE_CLIENT_ID || '',
+  verifyCredential,
+  serveBuiltDashboard = process.env.NODE_ENV === 'production',
+} = {}) {
   const db = new Database(dbPath);
   db.pragma('foreign_keys = ON');
   db.exec(`
@@ -110,9 +115,9 @@ function createApp({ dbPath = process.env.DB_PATH || path.join(__dirname, 'app.d
   });
   app.get('/dashboard', requireSession, (_req, res) => {
     res.set('Cache-Control', 'no-store');
-    const fs = require('node:fs');
-    const built = path.join(__dirname, 'dist', 'dashboard.html');
-    res.sendFile(fs.existsSync(built) ? built : path.join(__dirname, 'public', 'dashboard.html'));
+    // Vite serves /app.js and /style.css in dev; only production uses hashed dist assets.
+    const folder = serveBuiltDashboard ? 'dist' : 'public';
+    res.sendFile(path.join(__dirname, folder, 'dashboard.html'));
   });
   app.use(express.static(path.join(__dirname, 'dist')));
   app.use((err, _req, res, _next) => {
