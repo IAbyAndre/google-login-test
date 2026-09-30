@@ -14,40 +14,15 @@ async function showLogin() {
       window.location.replace('/dashboard');
       return;
     }
-    const { clientId } = await jsonRequest('/api/config');
-    if (!clientId) {
-      status.textContent = 'Configura GOOGLE_CLIENT_ID en .env y reinicia el servidor.';
-      return;
+    const { configured } = await jsonRequest('/api/config');
+    if (!configured) {
+      status.textContent = 'Configura GOOGLE_CLIENT_SECRET en .env para activar el login web.';
+      const link = document.querySelector('.google-login');
+      link.removeAttribute('href');
+      link.setAttribute('aria-disabled', 'true');
+    } else if (new URLSearchParams(window.location.search).has('error')) {
+      status.textContent = 'No se pudo iniciar sesión con Google. Inténtalo de nuevo.';
     }
-    // GIS is loaded asynchronously; stop waiting if the network blocks the script.
-    for (let attempt = 0; !window.google?.accounts?.id; attempt++) {
-      if (attempt >= 100) throw new Error('No se pudo cargar Google Identity Services.');
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    google.accounts.id.initialize({
-      client_id: clientId,
-      auto_select: false,
-      button_auto_select: false,
-      callback: async ({ credential }) => {
-        status.textContent = 'Verificando identidad…';
-        try {
-          await jsonRequest('/api/auth/google', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ credential }),
-          });
-          window.location.assign('/dashboard');
-        } catch (error) { status.textContent = error.message; }
-      },
-    });
-    google.accounts.id.renderButton(document.querySelector('#google-button'), {
-      // The medium standard button is never personalized with a browser account.
-      type: 'standard', theme: 'outline', size: 'medium',
-      shape: 'pill', text: 'signin_with', width: 230, locale: 'es',
-    });
-    // Replace the local visual placeholder only after GIS has drawn its button.
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    document.querySelector('.login-action').classList.add('ready');
-    status.textContent = '';
   } catch (error) { status.textContent = error.message || 'No se pudo conectar con el servidor.'; }
 }
 

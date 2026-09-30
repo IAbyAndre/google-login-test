@@ -5,10 +5,14 @@ const express = require('express');
 const Database = require('better-sqlite3');
 const { OAuth2Client } = require('google-auth-library');
 const SESSION_AGE = 7 * 24 * 60 * 60 * 1000;
+const LOGIN_AGE = 10 * 60 * 1000;
 
 function createApp({
   dbPath = process.env.DB_PATH || path.join(__dirname, 'app.db'),
   clientId = process.env.GOOGLE_CLIENT_ID || '',
+  clientSecret = process.env.GOOGLE_CLIENT_SECRET || '',
+  redirectUri = process.env.GOOGLE_REDIRECT_URI || '',
+  exchangeCode,
   verifyCredential,
   serveBuiltDashboard = process.env.NODE_ENV === 'production',
 } = {}) {
@@ -24,12 +28,22 @@ function createApp({
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS oauth_flows (
+      state_hash TEXT PRIMARY KEY,
+      code_verifier TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
   `);
   // Existing installations already have a users table without a profile photo.
   if (!db.pragma('table_info(users)').some((column) => column.name === 'picture')) {
     db.exec('ALTER TABLE users ADD COLUMN picture TEXT');
   }
-  const googleClient = new OAuth2Client(clientId);
+  const googleClient = new OAuth2Client(clientId, clientSecret, redirectUri);
+  const exchange = exchangeCode || (async (code, codeVerifier) => {
+    const { tokens } = await googleClient.getToken({ code, codeVerifier });
+    return tokens;
+  });
   const verify = verifyCredential || (async (credential) => {
     const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: clientId });
     return ticket.getPayload();
@@ -42,15 +56,23 @@ function createApp({
   const insertSession = db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)');
   const deleteSession = db.prepare('DELETE FROM sessions WHERE token_hash = ?');
   const deleteExpired = db.prepare('DELETE FROM sessions WHERE expires_at <= ?');
+  const insertFlow = db.prepare('INSERT INTO oauth_flows (state_hash, code_verifier, nonce, expires_at) VALUES (?, ?, ?, ?)');
+  const findFlow = db.prepare('SELECT code_verifier, nonce, expires_at FROM oauth_flows WHERE state_hash = ?');
+  const deleteFlow = db.prepare('DELETE FROM oauth_flows WHERE state_hash = ?');
+  const deleteExpiredFlows = db.prepare('DELETE FROM oauth_flows WHERE expires_at <= ?');
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '16kb' }));
+  const configured = Boolean(clientId && clientSecret && redirectUri);
 
   function cookieOptions(req) {
-    // TLS terminates at the exe.dev proxy; the browser's Origin carries the public scheme.
+    // OAuth navigation/callback has no Origin header; the configured public URI is HTTPS.
     const origin = req.get('origin') || '';
-    return { httpOnly: true, secure: origin.startsWith('https://') || req.secure,
+    return { httpOnly: true, secure: origin.startsWith('https://') || redirectUri.startsWith('https://') || req.secure,
       sameSite: 'lax', path: '/', maxAge: SESSION_AGE };
+  }
+  function clearCookie(req, res, name) {
+    const { maxAge: _maxAge, ...options } = cookieOptions(req);
+    res.clearCookie(name, options);
   }
   function sameOrigin(req, res, next) {
     let origin;
@@ -76,18 +98,49 @@ function createApp({
     next();
   }
 
-  app.get('/api/config', (_req, res) => res.json({ clientId }));
-  app.post('/api/auth/google', sameOrigin, async (req, res) => {
-    if (!clientId) return res.status(503).json({ error: 'Configura GOOGLE_CLIENT_ID en .env.' });
-    const credential = req.body?.credential;
-    if (typeof credential !== 'string' || credential.length > 10000 || !credential) {
-      return res.status(400).json({ error: 'Falta el ID token de Google.' });
+  app.get('/api/config', (_req, res) => res.json({ configured }));
+  app.get('/api/auth/google/start', (req, res) => {
+    if (!configured) return res.status(503).send('Configura GOOGLE_CLIENT_SECRET y GOOGLE_REDIRECT_URI en .env.');
+    const state = crypto.randomBytes(32).toString('hex');
+    const nonce = crypto.randomBytes(32).toString('hex');
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+    deleteExpiredFlows.run(Date.now());
+    insertFlow.run(crypto.createHash('sha256').update(state).digest('hex'), codeVerifier, nonce, Date.now() + LOGIN_AGE);
+    res.cookie('oauth_state', state, { ...cookieOptions(req), maxAge: LOGIN_AGE });
+    res.set('Cache-Control', 'no-store');
+    res.redirect(googleClient.generateAuthUrl({
+      scope: ['openid', 'email', 'profile'],
+      state, nonce, prompt: 'select_account',
+      code_challenge: codeChallenge, code_challenge_method: 'S256',
+    }));
+  });
+  app.get('/api/auth/google/callback', async (req, res) => {
+    const state = req.query.state;
+    const cookieState = (req.get('cookie') || '').match(/(?:^|;\s*)oauth_state=([a-f0-9]{64})(?:;|$)/)?.[1];
+    if (typeof state !== 'string' || !/^[a-f0-9]{64}$/.test(state) || !cookieState ||
+      !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(cookieState))) {
+      return res.status(400).send('Estado OAuth inválido. Vuelve a iniciar sesión.');
+    }
+    clearCookie(req, res, 'oauth_state');
+    const stateHash = crypto.createHash('sha256').update(state).digest('hex');
+    const flow = findFlow.get(stateHash);
+    deleteFlow.run(stateHash); // Each authorization attempt can only be used once.
+    if (!flow || flow.expires_at <= Date.now()) return res.status(400).send('Inicio de sesión caducado.');
+    const code = req.query.code;
+    if (req.query.error || typeof code !== 'string' || !code || code.length > 4096) {
+      return res.redirect('/?error=google');
     }
     let profile;
-    try { profile = await verify(credential); }
-    catch { return res.status(401).json({ error: 'ID token inválido.' }); }
-    if (!profile?.sub || !profile?.email || profile.email_verified !== true) {
-      return res.status(401).json({ error: 'Cuenta de Google no verificada.' });
+    try {
+      const tokens = await exchange(code, flow.code_verifier);
+      if (!tokens?.id_token) throw new Error('Missing ID token');
+      profile = await verify(tokens.id_token, flow.nonce);
+    } catch {
+      return res.redirect('/?error=google');
+    }
+    if (!profile?.sub || !profile?.email || profile.email_verified !== true || profile.nonce !== flow.nonce) {
+      return res.redirect('/?error=google');
     }
     const picture = typeof profile.picture === 'string' && profile.picture.startsWith('https://')
       ? profile.picture : null;
@@ -97,7 +150,7 @@ function createApp({
     deleteExpired.run(Date.now());
     insertSession.run(hash, userId, Date.now() + SESSION_AGE);
     res.cookie('sid', token, cookieOptions(req));
-    res.json({ ok: true });
+    res.redirect('/dashboard');
   });
   app.get('/api/me', requireSession, (req, res) => {
     res.set('Cache-Control', 'no-store'); res.json({ user: req.user });
@@ -109,8 +162,7 @@ function createApp({
   app.post('/api/logout', sameOrigin, (req, res) => {
     const token = sessionToken(req);
     if (token) deleteSession.run(crypto.createHash('sha256').update(token).digest('hex'));
-    const { maxAge: _maxAge, ...options } = cookieOptions(req);
-    res.clearCookie('sid', options);
+    clearCookie(req, res, 'sid');
     res.json({ ok: true });
   });
   app.get('/dashboard', requireSession, (_req, res) => {

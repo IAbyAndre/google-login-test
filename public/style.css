@@ -2,7 +2,14 @@
 body { min-height: 100vh; margin: 0; display: grid; place-items: center; }
 .card { width: min(360px, calc(100% - 48px)); padding: 32px; background: white; border: 1px solid #e6e6e6; border-radius: 10px; }
 h1 { margin: 0 0 28px; font-size: 1.4rem; font-weight: 600; }
+.login-card { height: 150px; }
+.google-login { display: flex; align-items: center; justify-content: center; gap: 9px; width: 228px; height: 34px; margin: 0 auto; border: 1px solid #dadce0; border-radius: 99px; background: white; color: #3c4043; font-size: 14px; text-decoration: none; }
+.google-login:hover { background: #f7f9fc; }
+.google-login:focus-visible { outline: 2px solid #1a73e8; outline-offset: 2px; }
+.google-login[aria-disabled="true"] { opacity: .5; cursor: default; pointer-events: none; }
+.google-g { font-size: 18px; font-weight: bold; background: conic-gradient(#4285f4 0 25%, #34a853 25% 48%, #fbbc05 48% 68%, #ea4335 68% 82%); background-clip: text; color: transparent; }
 #status { min-height: 1.3em; margin: 18px 0 0; color: #666; font-size: .9rem; }
+.login-card #status { height: 2.8em; overflow: auto; }
 .profile { display: flex; align-items: center; gap: 16px; margin: 24px 0; }
 .profile[hidden] { display: none; }
 .avatar { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; border-radius: 50%; background: #f0f1f3; color: #555; overflow: hidden; }
