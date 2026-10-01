@@ -1,9 +1,9 @@
 :root { font-family: system-ui, sans-serif; color: #242424; background: #fafafa; }
 body { min-height: 100vh; margin: 0; display: grid; place-items: center; }
 .card { width: min(360px, calc(100% - 48px)); padding: 32px; background: white; border: 1px solid #e6e6e6; border-radius: 10px; }
-h1 { margin: 0 0 28px; font-size: 1.4rem; font-weight: 600; }
+h1 { margin: 0 0 28px; font-size: 1.4rem; font-weight: 600;text-align: center; }
 .login-card { height: 150px; }
-.google-login { display: flex; align-items: center; justify-content: center; gap: 9px; width: 228px; height: 34px; margin: 0 auto; border: 1px solid #dadce0; border-radius: 99px; background: white; color: #3c4043; font-size: 14px; text-decoration: none; }
+.google-login { display: flex; align-items: center; justify-content: center; gap: 9px; width: 228px; height: 50px; margin: 0 auto; border: 1px solid #dadce0; border-radius: 99px; background: white; color: #3c4043; font-size: 14px; text-decoration: none; }
 .google-login:hover { background: #f7f9fc; }
 .google-login:focus-visible { outline: 2px solid #1a73e8; outline-offset: 2px; }
 .google-login[aria-disabled="true"] { opacity: .5; cursor: default; pointer-events: none; }
